@@ -49,7 +49,7 @@ export var goerpc = "https://rpc.ankr.com/eth_goerli";
 BSC Testnet
 */
 export var bsctErc20 = "0x9ab834C78a00109f9c2e2be7C94AB70ae7f940B9";
-export var bsctCustody = "0xA77cDb8cD559EaD06d7Dd16988F3905296A9B9f6";
+export var bsctCustody = "";
 export var bsctNFT = "0x2eF59F517E2576302418CD877177aFe192A09477";
 export var bsctrpc = "https://data-seed-prebsc-1-s1.binance.org:8545/";
 

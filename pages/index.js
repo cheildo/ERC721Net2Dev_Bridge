@@ -276,14 +276,13 @@ export default function Home() {
     theBalance.forEach(async(id) => {
         console.log(`ids are ${id}`)
         let token = parseInt(id, 16)
-        console.log(`parsed id is ${token}`)
           const rawUri = await contract.tokenURI(token)
           console.log(`rawUri: ${rawUri}`)
           const Uri = Promise.resolve(rawUri)
-          const getUri = Uri.then(value => {
+          const getUri = Uri.then(async (value) => {
             let str = value
             let cleanUri = str.replace('ipfs://', 'https://ipfs.io/ipfs/')
-            let metadata = axios.get(cleanUri).catch(function (error) {
+            let metadata = await axios.get(cleanUri).catch(function (error) {
               console.log(error.toJSON());
             });
             console.log(`metadata: ${metadata} `)
@@ -343,28 +342,34 @@ async function initTransfer() {
   const connection = await web3Modal.connect();
   const provider = new ethers.providers.Web3Provider(connection);
   const signer = provider.getSigner();
+  console.log("Signer: " + signer)
   const userWallet = await signer.getAddress();
-  const ethprovider = new ethers.providers.JsonRpcProvider(dRpc);
+  const bscProvider = new ethers.providers.JsonRpcProvider(dRpc);
   const ethKey = simpleCrypto.decrypt(cipherEth);
-  var wallet = new ethers.Wallet(ethKey, ethprovider);
+  var walletSrc = new ethers.Wallet(ethKey, provider);
+  //new ethers.providers.JsonRpcProvider(mumrpc)
+  console.log("WalletSrc: " + walletSrc.address)
+  var wallet = new ethers.Wallet(ethKey, bscProvider);
+  console.log("Wallet: " + wallet.address)
   const sourceNFTcontract = new ethers.Contract(sourceNft, NftABI, signer);
   const tokenContract = new ethers.Contract(erc20Address, Erc20ABI, signer);
+  const sNFTCustody = new ethers.Contract(sourceCustody, CustodyABI, walletSrc);
   //const DestinationCustody = new ethers.Contract(dCustodyAddress, CustodyABI, wallet);
   const destinationNFTcontract = new ethers.Contract(dNFT, BridgeABI, wallet);
   handler();
+
   await new Promise((r) => setTimeout(r, 1000));
   let init = 'Initializing Transfer...'
   document.getElementById("displayconfirm1").innerHTML = init
   console.log("Starting transfer process...")
-  let status3 = "Approve the transaction to allow the bridge to take custody of your NFT on Polygon..."
+  let status3 = "Confirm setApproval for all..."
   document.getElementById("displayconfirm1").innerHTML = status3
   //const sCustUserContract = new ethers.Contract(sourceCustody, CustodyABI, signer);
-  const sNFTCustody = new ethers.Contract(sourceCustody, CustodyABI, wallet);
   const tx1 = await sourceNFTcontract.setApprovalForAll(sourceCustody, true)
   .catch( (error) => { console.log(error)});
   await tx1.wait();
   console.log("Approval to Transfer NFT Received from User!");
-  let status4 = "Approve the transaction to pay for the migration fees..."
+  let status4 = "Confirm the transaction to pay for the migration fees..."
   document.getElementById("displayconfirm1").innerHTML = status4 
   await new Promise((r) => setTimeout(r, 4000));
   let tx = {
@@ -372,18 +377,27 @@ async function initTransfer() {
     value: ethers.utils.parseEther('0.00001', 'ether')
   };
   const transaction = await signer.sendTransaction(tx).then(async function (res) {
-    console.log("Transaction Hash: " + res.hash);
+    console.log("Native token payment transaction Hash: " + res.hash);
+
     balance.forEach(async(tokenId) => {
       console.log(`The id is ${tokenId}`);
       let status1 = "Migration fees successfully paid..."
       document.getElementById("displayconfirm1").innerHTML = status1
       await new Promise((r) => setTimeout(r, 4000));
-      let status2 = "Taking custody of your NFT on Polygon Network..."
+      let status2 = "Confirm the transaction to allow the bridge to take your NFT in custody on the Polygon Network..."
       document.getElementById("displayconfirm1").innerHTML = status2 
-      await new Promise((r) => setTimeout(r, 5000));
-      let options = { gasLimit: 3000000000 };
-      const tx3 = await sNFTCustody.retainNFTN(userWallet, tokenId, options);
-      await tx3.wait().then(async function (res) {
+      let options = { gasLimit: 3000000 };
+      const tx3 = await sNFTCustody.retainNFTN(userWallet, tokenId, options).then(res=>{
+        console.log(`Retain NFT transaction hash is: ${res.hash}`);
+      })
+      .catch( (error) => { console.log(error)});
+      const tokenOwner = await sourceNFTcontract.ownerOf(tokenId).then( res=>{
+        console.log(`The owner of this tokenId is ${res}`);
+        console.log(`The custody address is ${mumCustody}`);
+      return res;
+      });
+
+      if (tokenOwner==mumCustody) {
         console.log(`Retain NFT transaction hash is: ${res.hash}`);
         console.log("NFT transfered to bridge wallet on source network!");
         await new Promise((r) => setTimeout(r, 4000));
@@ -416,10 +430,12 @@ async function initTransfer() {
         }
         getConfirmLink(confirmOut4);
         setSource();
-      })
-      .catch((err) => {
-        console.log(err);
-      });
+      }
+      else {
+        let status5 = "The custody did not receive the NFT..."
+        document.getElementById("displayconfirm1").innerHTML = status5 
+        console.log("Custody did not receive the NFT");
+      }
     })
   })
 }
